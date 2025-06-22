@@ -2,6 +2,12 @@
 
 Aplicacion de escritorio para consultar resultados de Loto Plus y Quiniela.
 
+La interfaz ahora utiliza `ttkbootstrap` para un estilo moderno y
+animaciones de hover en los botones.
+
+Se genera un archivo `trebol.log` con mensajes de depuración para facilitar
+el troubleshooting de la aplicación.
+
 ## Ejecucion
 
 Instalar dependencias:
@@ -13,6 +19,7 @@ Para correr la aplicacion:
 ```
 python trebol.py
 ```
+El archivo `trebol.log` se actualizará con información de la ejecución.
 
 ## Crear ejecutable
 
