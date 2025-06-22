@@ -217,6 +217,12 @@ class TrebolApp:
                 results['fecha'] = header.group(2)
             tokens = text.split('**')
             modalidades = ['TRADICIONAL', 'MATCH', 'DESQUITE', 'SALE O SALE']
+            moda_map = {
+                'TRADICIONAL': 'Tradicional',
+                'MATCH': 'Match',
+                'DESQUITE': 'Desquite',
+                'SALE O SALE': 'Sale o Sale',
+            }
             for moda in modalidades:
                 try:
                     idx = tokens.index(moda)
@@ -238,7 +244,8 @@ class TrebolApp:
                     info['pozo'] = pozo
                 except ValueError:
                     pass
-                results[moda.capitalize()] = info
+                key = moda_map.get(moda, moda.capitalize())
+                results[key] = info
             plus_match = re.search(r"N\u00famero plus:\*\*\s*\*\*(\d+)\*\*", text)
             if plus_match:
                 results['Plus'] = int(plus_match.group(1))
@@ -381,7 +388,7 @@ def main():
         root = tb.Window(themename='superhero')
     else:
         root = tk.Tk()
-    root.geometry('1000x750')
+    root.geometry('1000x850')
     app = TrebolApp(root)
     root.protocol('WM_DELETE_WINDOW', app.on_close)
     try:
