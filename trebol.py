@@ -2,9 +2,11 @@ import json
 import logging
 import os
 import threading
+import itertools
+import time
 import tkinter as tk
 from tkinter import messagebox
-from datetime import datetime
+from datetime import datetime, timedelta
 
 try:
     import winsound
@@ -46,6 +48,7 @@ class TrebolApp:
         self.create_widgets()
         self.load_user_data()
         self.previous_results = None
+        self.spinner_running = False
         if HAS_TRAY:
             self.setup_tray()
 
@@ -61,27 +64,31 @@ class TrebolApp:
             e = tk.Entry(self.loto_frame, width=3, font=big_font, justify="center")
             e.grid(row=1, column=i, padx=3, pady=5)
             self.loto_entries.append(e)
-        self.plus_entry = tk.Entry(self.loto_frame, width=2, font=big_font, justify="center")
-        self.plus_entry.grid(row=1, column=6, padx=3, pady=5)
-        self.loto_info = tk.Label(self.loto_frame, text="", bg="red", fg="white", font=big_font)
-        self.loto_info.grid(row=2, column=0, columnspan=7, pady=5)
 
-        self.quini_frame = tk.Frame(self.root, bg="light grey", padx=10, pady=10)
-        self.quini_frame.pack(fill="both", expand=True, padx=10, pady=5)
-        tk.Label(self.quini_frame, text="Quiniela", bg="light grey", font=("Helvetica", 18, "bold")).grid(row=0, column=0, sticky="w")
-        self.qui_entry = tk.Entry(self.quini_frame, width=20, font=big_font)
-        self.qui_entry.grid(row=1, column=0, sticky="w", pady=5)
-        self.text = tk.Text(self.quini_frame, width=60, height=10, font=("Helvetica", 14))
-        self.text.grid(row=2, column=0, pady=5)
+        tk.Label(self.loto_frame, text="Número Plus", bg="red", fg="white", font=big_font).grid(row=2, column=0, columnspan=6, pady=5)
+        self.plus_entry = tk.Entry(self.loto_frame, width=2, font=big_font, justify="center")
+        self.plus_entry.grid(row=3, column=0, padx=3, pady=5, columnspan=6)
+
+        self.loto_info = tk.Label(self.loto_frame, text="", bg="red", fg="white", font=big_font)
+        self.loto_info.grid(row=4, column=0, columnspan=7, pady=5)
+
+        self.text_frame = tk.Frame(self.root, bg="light grey", padx=10, pady=10)
+        self.text_frame.pack(fill="both", expand=True, padx=10, pady=5)
+        self.text = tk.Text(self.text_frame, width=70, height=15, font=("Helvetica", 14), wrap="word")
+        self.text.pack(side="left", fill="both", expand=True)
+        self.scroll = ttk.Scrollbar(self.text_frame, command=self.text.yview)
+        self.scroll.pack(side="right", fill="y")
+        self.text.configure(yscrollcommand=self.scroll.set)
 
         btn_frame = ttk.Frame(self.root, padding=10)
         btn_frame.pack()
         btn_style = 'primary.TButton' if tb else 'TButton'
         danger_style = 'danger.TButton' if tb else 'TButton'
-        self.check_btn = ttk.Button(btn_frame, text='Checkeá mi jugada', command=self.scrape_once, style=btn_style)
+        self.check_btn = ttk.Button(btn_frame, text='Checkeá mi jugada', command=self.scrape_once, style=btn_style, width=20)
         self.check_btn.pack(side='left', padx=5)
-        self.exit_btn = ttk.Button(btn_frame, text='Salir', command=self.on_close, style=danger_style)
-        self.exit_btn.pack(side='left', padx=5)
+
+        self.exit_btn = ttk.Button(self.root, text='Salir', command=self.on_close, style=danger_style)
+        self.exit_btn.place(relx=1.0, rely=0.0, anchor='ne', x=-10, y=10)
 
         self.status_var = tk.StringVar(value='Listo')
         self.status_label = ttk.Label(self.root, textvariable=self.status_var, anchor='w')
@@ -121,7 +128,6 @@ class TrebolApp:
             entry.insert(0, str(val).zfill(2))
         if 'plus' in data and data['plus'] is not None:
             self.plus_entry.insert(0, str(data['plus']))
-        self.qui_entry.insert(0, ','.join(data.get('quiniela', [])))
 
     def save_user_data(self):
         loto = []
@@ -130,22 +136,32 @@ class TrebolApp:
             if v.isdigit():
                 loto.append(int(v))
         plus = int(self.plus_entry.get()) if self.plus_entry.get().isdigit() else None
-        qui_raw = [q.strip() for q in self.qui_entry.get().split(',') if q.strip()]
-        quiniela = [q.zfill(4) if len(q)<4 else q[-4:] for q in qui_raw][:3]
-        data = {'loto': loto, 'plus': plus, 'quiniela': quiniela}
+        data = {'loto': loto, 'plus': plus}
         with open(USERS_FILE, 'w', encoding='utf-8') as f:
             json.dump(data, f)
         logging.info('User data saved')
 
+    def start_spinner(self):
+        self.spinner_running = True
+        def spin():
+            for c in itertools.cycle('|/-\\'):
+                if not self.spinner_running:
+                    break
+                self.status_var.set(f'Buscando los resultados en TuJugada.com... {c}')
+                time.sleep(0.1)
+        threading.Thread(target=spin, daemon=True).start()
+
+    def stop_spinner(self):
+        self.spinner_running = False
+
     def scrape_once(self):
         logging.info('Starting manual update')
-        self.status_var.set('Buscando los resultados en TuJugada.com...')
-        self.root.update_idletasks()
+        self.start_spinner()
         loto_results = self.fetch_loto()
-        quiniela_results = self.fetch_quiniela()
+        self.stop_spinner()
         self.status_var.set('Analizando resultados...')
         self.root.update_idletasks()
-        self.compare_and_display(loto_results, quiniela_results)
+        self.compare_and_display(loto_results)
         self.save_user_data()
         self.status_var.set('Listo')
 
@@ -193,33 +209,18 @@ class TrebolApp:
             logging.exception('Error fetching Loto Plus')
             return {'error': str(e)}
 
-    def fetch_quiniela(self):
-        """Scrape Quiniela results using a text proxy."""
-        url = 'https://r.jina.ai/https://www.tujugada.com.ar/quiniela-de-hoy.asp'
+    def calculate_next_draw(self, fecha_str: str) -> str:
         try:
-            logging.info('Fetching Quiniela results')
-            r = requests.get(url, headers={'User-Agent': 'Mozilla/5.0'})
-            text = r.text
-            results = {}
-            current = None
-            for line in text.splitlines():
-                m_region = re.match(r"\[([A-ZÁÉÍÓÚÑ\s]+)\]", line)
-                if m_region:
-                    current = m_region.group(1).strip()
-                    results[current] = {}
-                    continue
-                m_turno = re.match(r"\[([A-Za-zÁÉÍÓÚÑñ ]+) (\d{1,4}|---|----)\]", line)
-                if m_turno and current:
-                    turno = m_turno.group(1).strip()
-                    num = m_turno.group(2)
-                    results[current][turno] = num
-            logging.info('Fetched Quiniela results successfully')
-            return results
-        except Exception as e:
-            logging.exception('Error fetching Quiniela')
-            return {'error': str(e)}
+            d = datetime.strptime(fecha_str, '%d/%m/%Y')
+        except Exception:
+            d = datetime.now()
+        d += timedelta(days=1)
+        while d.weekday() not in (2, 5):  # Wednesday or Saturday
+            d += timedelta(days=1)
+        d = d.replace(hour=22, minute=0, second=0)
+        return d.strftime('%d/%m/%Y %H:%M')
 
-    def compare_and_display(self, loto_results, quiniela_results):
+    def compare_and_display(self, loto_results):
         self.text.delete('1.0', tk.END)
         now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         self.text.insert(tk.END, f'Actualizacion: {now}\n')
@@ -237,7 +238,9 @@ class TrebolApp:
             gan = trad.get('ganadores', '')
             pozo = trad.get('pozo', '')
             status = f'GANADORES : {gan} | POZO: {pozo}'
-        self.loto_info.config(text=f'Sorteo {sorteo} - {fecha} {status}')
+
+        next_draw = self.calculate_next_draw(fecha)
+        self.loto_info.config(text=f'Sorteo {sorteo} - {fecha} {status} | Próximo sorteo: {next_draw}')
 
         result_numbers = trad.get('numeros', [])
         plus_num = loto_results.get('Plus')
@@ -276,14 +279,8 @@ class TrebolApp:
         if plus_num is not None:
             self.text.insert(tk.END, f'Plus: {plus_num}\n')
 
-        self.text.insert(tk.END, '\n--- Quiniela ---\n')
-        if 'error' in quiniela_results:
-            self.text.insert(tk.END, f"Error al obtener Quiniela: {quiniela_results['error']}\n")
-        else:
-            for jur, tur in quiniela_results.items():
-                self.text.insert(tk.END, f'{jur}\n')
-                for turno, val in tur.items():
-                    self.text.insert(tk.END, f' {turno}: {val}\n')
+        self.text.insert(tk.END, f'Próximo sorteo: {next_draw}\n')
+
         self.text.insert(tk.END, '\n')
         if loto_results != self.previous_results:
             self.notify_sound()
@@ -318,6 +315,7 @@ def main():
         root = tb.Window(themename='superhero')
     else:
         root = tk.Tk()
+    root.geometry('700x600')
     app = TrebolApp(root)
     root.protocol('WM_DELETE_WINDOW', app.on_close)
     try:
