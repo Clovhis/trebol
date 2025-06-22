@@ -96,7 +96,7 @@ class TrebolApp:
             pystray.MenuItem('Salir', self.on_close)
         ))
         threading.Thread(target=self.tray_icon.run, daemon=True).start()
-        self.root.after(1000, self.hide_window)
+        # Do not hide the main window automatically so users can interact
 
     def hide_window(self):
         self.root.withdraw()
