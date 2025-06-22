@@ -87,6 +87,9 @@ class TrebolApp:
         self.check_btn = ttk.Button(btn_frame, text='Checkeá mi jugada', command=self.scrape_once, style=btn_style, width=20)
         self.check_btn.pack(side='left', padx=5)
 
+        self.reset_btn = ttk.Button(btn_frame, text='Resetear', command=self.reset_jugada, style=danger_style, width=12)
+        self.reset_btn.pack(side='left', padx=5)
+
         self.exit_btn = ttk.Button(self.root, text='Salir', command=self.on_close, style=danger_style)
         self.exit_btn.place(relx=1.0, rely=0.0, anchor='ne', x=-10, y=10)
 
@@ -95,7 +98,7 @@ class TrebolApp:
         self.status_label.pack(fill='x', padx=5, pady=5)
 
         if tb:
-            for btn in (self.check_btn, self.exit_btn):
+            for btn in (self.check_btn, self.reset_btn, self.exit_btn):
                 btn.bind('<Enter>', lambda e, b=btn: b.state(['hover']))
                 btn.bind('<Leave>', lambda e, b=btn: b.state(['!hover']))
 
@@ -141,15 +144,27 @@ class TrebolApp:
             json.dump(data, f)
         logging.info('User data saved')
 
+    def reset_jugada(self):
+        for e in self.loto_entries:
+            e.delete(0, tk.END)
+            e.config(bg='white', fg='black')
+        self.plus_entry.delete(0, tk.END)
+        self.plus_entry.config(bg='white', fg='black')
+        self.text.delete('1.0', tk.END)
+        self.status_var.set('Listo')
+
     def start_spinner(self):
         self.spinner_running = True
-        def spin():
-            for c in itertools.cycle('|/-\\'):
-                if not self.spinner_running:
-                    break
-                self.status_var.set(f'Buscando los resultados en TuJugada.com... {c}')
-                time.sleep(0.1)
-        threading.Thread(target=spin, daemon=True).start()
+        self._spinner_cycle = itertools.cycle('|/-\\')
+
+        def update():
+            if not self.spinner_running:
+                return
+            c = next(self._spinner_cycle)
+            self.status_var.set(f'Buscando los resultados en TuJugada.com... {c}')
+            self.root.after(100, update)
+
+        update()
 
     def stop_spinner(self):
         self.spinner_running = False
@@ -315,7 +330,7 @@ def main():
         root = tb.Window(themename='superhero')
     else:
         root = tk.Tk()
-    root.geometry('700x600')
+    root.geometry('800x750')
     app = TrebolApp(root)
     root.protocol('WM_DELETE_WINDOW', app.on_close)
     try:
