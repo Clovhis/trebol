@@ -1,6 +1,6 @@
 # Trebol
 
-Aplicacion de escritorio para consultar resultados de Loto Plus y Quiniela.
+Aplicacion de escritorio para consultar resultados de Loto Plus.
 
 La interfaz ahora utiliza `ttkbootstrap` para un estilo moderno y
 animaciones de hover en los botones.
