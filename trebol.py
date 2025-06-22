@@ -62,19 +62,43 @@ class TrebolApp:
         self.loto_entries = []
         for i in range(6):
             e = tk.Entry(self.loto_frame, width=3, font=big_font, justify="center")
-            e.grid(row=1, column=i, padx=3, pady=5)
+            e.grid(row=1, column=i, padx=1, pady=5)
             self.loto_entries.append(e)
 
         tk.Label(self.loto_frame, text="Número Plus", bg="red", fg="white", font=big_font).grid(row=2, column=0, columnspan=6, pady=5)
         self.plus_entry = tk.Entry(self.loto_frame, width=2, font=big_font, justify="center")
-        self.plus_entry.grid(row=3, column=0, padx=3, pady=5, columnspan=6)
+        self.plus_entry.grid(row=3, column=0, padx=1, pady=5, columnspan=6)
 
         self.loto_info = tk.Label(self.loto_frame, text="", bg="red", fg="white", font=big_font)
         self.loto_info.grid(row=4, column=0, columnspan=7, pady=5)
 
+        # Frame para mostrar resultados de cada modalidad
+        self.results_frame = tk.Frame(self.root, padx=10, pady=5)
+        self.results_frame.pack(fill="x", padx=10)
+
+        self.result_labels = {}
+        self.result_counts = {}
+        modalidades = ["Tradicional", "Match", "Desquite", "Sale o Sale"]
+        for r, moda in enumerate(modalidades):
+            tk.Label(self.results_frame, text=moda, font=big_font).grid(row=r, column=0, padx=5, sticky="e")
+            lbls = []
+            for c in range(6):
+                lbl = tk.Label(self.results_frame, width=3, font=big_font, relief="groove", bd=2)
+                lbl.grid(row=r, column=c + 1, padx=1, pady=2)
+                lbls.append(lbl)
+            count_lbl = tk.Label(self.results_frame, font=big_font)
+            count_lbl.grid(row=r, column=7, padx=5, sticky="w")
+            self.result_labels[moda] = lbls
+            self.result_counts[moda] = count_lbl
+
+        # Plus
+        tk.Label(self.results_frame, text="Plus", font=big_font).grid(row=len(modalidades), column=0, padx=5, sticky="e")
+        self.plus_result_label = tk.Label(self.results_frame, width=3, font=big_font, relief="groove", bd=2)
+        self.plus_result_label.grid(row=len(modalidades), column=1, padx=1, pady=2)
+
         self.text_frame = tk.Frame(self.root, bg="light grey", padx=10, pady=10)
         self.text_frame.pack(fill="both", expand=True, padx=10, pady=5)
-        self.text = tk.Text(self.text_frame, width=70, height=15, font=("Helvetica", 14), wrap="word")
+        self.text = tk.Text(self.text_frame, width=80, height=15, font=("Helvetica", 14), wrap="word")
         self.text.pack(side="left", fill="both", expand=True)
         self.scroll = ttk.Scrollbar(self.text_frame, command=self.text.yview)
         self.scroll.pack(side="right", fill="y")
@@ -260,6 +284,12 @@ class TrebolApp:
         result_numbers = trad.get('numeros', [])
         plus_num = loto_results.get('Plus')
 
+        user_numbers = []
+        for e in self.loto_entries:
+            val = e.get().strip()
+            if val.isdigit():
+                user_numbers.append(int(val))
+
         for e in self.loto_entries:
             e.config(bg='white', fg='black')
         self.plus_entry.config(bg='white', fg='black')
@@ -281,18 +311,39 @@ class TrebolApp:
                 self.plus_entry.config(bg='red', fg='white')
 
         self.text.insert(tk.END, '--- Loto Plus ---\n')
-        for moda, info in loto_results.items():
-            if moda in ('sorteo', 'fecha', 'Plus'):
-                continue
+        modalidades = ["Tradicional", "Match", "Desquite", "Sale o Sale"]
+        for moda in modalidades:
+            info = loto_results.get(moda, {})
             nums = info.get('numeros', [])
             gan = info.get('ganadores', '')
             pozo = info.get('pozo', '')
-            line = f"{moda}: {nums}"
+            aciertos = len([n for n in nums if n in user_numbers])
+            line = f"{moda}: {nums} | ACIERTOS: {aciertos}"
             if gan or pozo:
                 line += f" | GANADORES: {gan} | POZO: {pozo}"
             self.text.insert(tk.END, line + '\n')
+            lbls = self.result_labels.get(moda)
+            count_lbl = self.result_counts.get(moda)
+            if lbls:
+                for idx, lbl in enumerate(lbls):
+                    if idx < len(nums):
+                        n = nums[idx]
+                        color = 'green' if n in user_numbers else 'red'
+                        lbl.config(text=str(n).zfill(2), bg=color, fg='white')
+                    else:
+                        lbl.config(text='', bg=self.results_frame.cget('bg'))
+            if count_lbl is not None:
+                count_lbl.config(text=f'{aciertos} aciertos')
         if plus_num is not None:
             self.text.insert(tk.END, f'Plus: {plus_num}\n')
+            if self.plus_result_label:
+                color = 'green' if plus_num in user_numbers else 'red'
+                if plus_num is not None:
+                    color = 'green' if (self.plus_entry.get().isdigit() and int(self.plus_entry.get()) == plus_num) else 'red'
+                self.plus_result_label.config(text=str(plus_num).zfill(2), bg=color, fg='white')
+        else:
+            if self.plus_result_label:
+                self.plus_result_label.config(text='')
 
         self.text.insert(tk.END, f'Próximo sorteo: {next_draw}\n')
 
@@ -330,7 +381,7 @@ def main():
         root = tb.Window(themename='superhero')
     else:
         root = tk.Tk()
-    root.geometry('800x750')
+    root.geometry('1000x750')
     app = TrebolApp(root)
     root.protocol('WM_DELETE_WINDOW', app.on_close)
     try:
