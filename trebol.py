@@ -21,6 +21,7 @@ except Exception:
 
 import requests
 from bs4 import BeautifulSoup
+import re
 
 try:
     import pystray
@@ -96,7 +97,7 @@ class TrebolApp:
             pystray.MenuItem('Salir', self.on_close)
         ))
         threading.Thread(target=self.tray_icon.run, daemon=True).start()
-        self.root.after(1000, self.hide_window)
+        # Do not hide the main window automatically so users can interact
 
     def hide_window(self):
         self.root.withdraw()
@@ -137,20 +138,22 @@ class TrebolApp:
             time.sleep(15)
 
     def fetch_loto(self):
-        url = 'https://www.tujugada.com.ar/loto.asp'
+        """Scrape Loto Plus results using a text proxy."""
+        url = 'https://r.jina.ai/https://www.tujugada.com.ar/loto.asp'
         try:
             logging.info('Fetching Loto Plus results')
             r = requests.get(url, headers={'User-Agent': 'Mozilla/5.0'})
-            soup = BeautifulSoup(r.text, 'html.parser')
-            tables = soup.select('table')
+            text = r.text
             results = {}
-            modalidades = ['Tradicional', 'Match', 'Desquite', 'Sale o Sale']
-            for name, table in zip(modalidades, tables[:4]):
-                nums = [int(td.text) for td in table.select('td') if td.text.isdigit()]
-                results[name] = nums
-            plus_span = soup.find('span', {'class': 'cboloto'})
-            plus = int(plus_span.text.strip()) if plus_span else None
-            results['Plus'] = plus
+            modalidades = ['TRADICIONAL', 'MATCH', 'DESQUITE', 'SALE O SALE']
+            for moda in modalidades:
+                m = re.search(rf"\*\*{moda}\*\*(.*?)\*\*PREMIOS", text, re.S)
+                if m:
+                    nums = re.findall(r'\d+', m.group(1))[:6]
+                    results[moda.capitalize()] = [int(n) for n in nums]
+            plus_match = re.search(r"\*\*N\u00famero plus:\*\*\s*\*\*(\d+)\*\*", text)
+            if plus_match:
+                results['Plus'] = int(plus_match.group(1))
             logging.info('Fetched Loto Plus results successfully')
             return results
         except Exception as e:
@@ -158,24 +161,25 @@ class TrebolApp:
             return {'error': str(e)}
 
     def fetch_quiniela(self):
-        url = 'https://www.tujugada.com.ar/quiniela-de-hoy.asp'
+        """Scrape Quiniela results using a text proxy."""
+        url = 'https://r.jina.ai/https://www.tujugada.com.ar/quiniela-de-hoy.asp'
         try:
             logging.info('Fetching Quiniela results')
             r = requests.get(url, headers={'User-Agent': 'Mozilla/5.0'})
-            soup = BeautifulSoup(r.text, 'html.parser')
-            tables = soup.select('table')
+            text = r.text
             results = {}
-            for table in tables:
-                heading = table.find_previous('h2')
-                if not heading:
+            current = None
+            for line in text.splitlines():
+                m_region = re.match(r"\[([A-ZÁÉÍÓÚÑ\s]+)\]", line)
+                if m_region:
+                    current = m_region.group(1).strip()
+                    results[current] = {}
                     continue
-                jurisdic = heading.text.strip()
-                turnos = {}
-                for row in table.select('tr')[1:]:
-                    cols = [c.text.strip() for c in row.select('td')]
-                    if len(cols)>=2:
-                        turnos[cols[0]] = cols[1]
-                results[jurisdic] = turnos
+                m_turno = re.match(r"\[([A-Za-zÁÉÍÓÚÑñ ]+) (\d{1,4}|---|----)\]", line)
+                if m_turno and current:
+                    turno = m_turno.group(1).strip()
+                    num = m_turno.group(2)
+                    results[current][turno] = num
             logging.info('Fetched Quiniela results successfully')
             return results
         except Exception as e:
